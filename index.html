@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Generador de Horarios</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+    }
+
+    .container {
+      margin: 20px;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    .form-container {
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-container label {
+      font-size: 14px;
+      color: #555;
+    }
+
+    .form-container input[type="date"], input[type="text"]  {
+      padding: 5px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .form-container button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+
+    .form-container button:hover {
+      background-color: #0056b3;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      color: #333;
+    }
+
+    td {
+      border: 1px solid #ddd;
+    }
+
+    .shift {
+      background-color: #f9f9f9;
+    }
+
+    .work-day {
+      background-color: #c6efce;
+      transition: background-color 0.3s;
+    }
+
+    .rest-day {
+      background-color: #f8d7da;
+      transition: background-color 0.3s;
+    }
+
+    .availability {
+      background-color: #d4edda;
+      color: #155724;
+    }
+
+    .shift-6am-2pm {
+      background-color: #e3f2fd;
+    }
+
+    .shift-2pm-10pm {
+      background-color: #ffecb3;
+    }
+
+    .shift-10pm-6am {
+      background-color: #f8bbd0;
+    }
+
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+
+    ul li {
+      padding: 8px;
+      background-color: #f2f2f2;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+
+    ul li:hover {
+      background-color: #e0e0e0;
+    }
+
+    h2 {
+      font-size: 18px;
+      color: #333;
+      margin-top: 30px;
+      font-weight: 600;
+    }
+
+    button:focus {
+      outline: none;
+      box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+    }
+
+      #employeeList li {
+    margin-bottom: 5px;
+  }
+
+  #employeeList button {
+    padding: 2px 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  #employeeList button:hover {
+    background-color: #ddd;
+  }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Generador de Horarios de Trabajo</h1>
+
+    <div class="form-container">
+      <label for="startDate">Fecha de inicio:</label>
+      <input type="date" id="startDate">
+      <label for="endDate">Fecha de fin:</label>
+      <input type="date" id="endDate">
+      <input type="text" id="employeeName" placeholder="Nombre del empleado">
+      <button onclick="addEmployee()">Agregar Empleado</button>
+    </div>
+
+    <ul id="employeeList"></ul>
+
+    <div class="form-container">
+      <button onclick="calculateWeeks()">Generar Horario</button>
+      <button onclick="downloadPDF()">Descargar PDF</button>
+    </div>
+
+    <div id="weeklySchedules"></div>
+  </div>
+
+  <script>
+    const employees = [];
+    const shifts = [
+      { name: "6 AM - 2 PM", maxEmployees: 5, extraHours: 0, class: 'shift-6am-2pm' },
+      { name: "2 PM - 10 PM", maxEmployees: 5, extraHours: 1, class: 'shift-2pm-10pm' },
+      { name: "10 PM - 6 AM", maxEmployees: 4, extraHours: 2, class: 'shift-10pm-6am' }
+    ];
+    const schedule = [];
+
+    const initialEmployees = [];
+
+    initialEmployees.forEach(emp => employees.push(emp));
+    updateEmployeeList();
+
+    function editEmployee(index) {
+      const newName = prompt("Editar nombre del empleado:", employees[index]);
+      if (newName && newName.trim() !== "") {
+      employees[index] = newName.trim();
+      updateEmployeeList();
+        }
+      }
+
+      function deleteEmployee(index) {
+        if (confirm(`¿Estás seguro que deseas eliminar a "${employees[index]}"?`)) {
+        employees.splice(index, 1);
+        updateEmployeeList();
+        }
+      }
+
+    function calculateWeeks() {
+      const startDate = new Date(document.getElementById("startDate").value);
+      const endDate = new Date(document.getElementById("endDate").value);
+      if (startDate && endDate) {
+        const diffTime = endDate - startDate;
+        const diffDays = diffTime / (1000 * 3600 * 24);
+        const numWeeks = Math.ceil(diffDays / 7);
+        generateSchedule(numWeeks, startDate);
+      }
+    }
+
+    function addEmployee() {
+      const nameInput = document.getElementById("employeeName");
+      const name = nameInput.value.trim();
+
+      if (name) {
+        employees.push(name);
+        nameInput.value = "";
+        updateEmployeeList();
+      }
+
+      // ✅ Aplica focus al input, no al string
+      nameInput.focus();
+    }
+
+    function updateEmployeeList() {
+      const list = document.getElementById('employeeList');
+      list.innerHTML = '';
+      employees.forEach((emp, index) => {
+        const li = document.createElement('li');
+        
+        const span = document.createElement("span");
+        span.textContent = `${index + 1}. ${emp} `;
+        li.appendChild(span);
+
+        // Botón editar
+        const editBtn = document.createElement("button");
+        editBtn.textContent = "✏️";
+        editBtn.title = "Editar";
+        editBtn.style.marginRight = "5px";
+        editBtn.onclick = () => editEmployee(index);
+        li.appendChild(editBtn);
+
+        // Botón eliminar
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "🗑️";
+        deleteBtn.title = "Eliminar";
+        deleteBtn.onclick = () => deleteEmployee(index);
+        li.appendChild(deleteBtn);
+
+        list.appendChild(li);
+      });
+    }
+
+function generateSchedule(numWeeks, startDate) {
+
+  if (employees.length < 14) {
+    alert("Debe haber al menos 14 empleados para generar los turnos.");
+    return;
+  }
+
+  const startDateInput = document.getElementById('startDate').value;
+  const endDateInput = document.getElementById('endDate').value;
+
+  
+  if (endDateInput <= startDateInput) {
+    alert("La fecha de fin debe ser posterior a la de inicio.");
+    return;
+  }
+
+  if (!startDateInput || !endDateInput) {
+    alert("Por favor, selecciona tanto la fecha de inicio como la fecha final.");
+    return;
+  }
+
+  schedule.length = 0;
+  let currentDate = new Date(startDate);
+  const weeklySchedulesContainer = document.getElementById("weeklySchedules");
+  weeklySchedulesContainer.innerHTML = "";
+
+  for (let week = 0; week < numWeeks; week++) {
+    const weekSchedule = [];
+
+    // Inicializar estructura para días de la semana (0 = domingo, 6 = sábado)
+    const dailyAssignments = Array.from({ length: 7 }, () => ({
+      "6 AM - 2 PM": [],
+      "2 PM - 10 PM": [],
+      "10 PM - 6 AM": []
+    }));
+
+    // Mezclar empleados para aleatoriedad
+    const shuffledEmployees = [...employees].sort(() => Math.random() - 0.5);
+
+    // Recorremos empleados y les asignamos descansos y turnos
+    shuffledEmployees.forEach((employee, index) => {
+      // Elegimos 2 días consecutivos de descanso aleatorios
+      const firstRestDay = Math.floor(Math.random() * 6); // 0-5
+      const secondRestDay = (firstRestDay + 1) % 7;
+      const restDays = [firstRestDay, secondRestDay];
+
+      // Asignar turno rotativo equilibrado
+      const shiftIndex = (index + week) % shifts.length;
+      const shift = shifts[shiftIndex];
+
+      const workDays = [];
+
+      // Llenamos los días laborables
+      for (let i = 0; i < 7; i++) {
+        if (!restDays.includes(i)) {
+          workDays.push(i);
+          dailyAssignments[i][shift.name].push(employee);
+        }
+      }
+
+      const extraHours = shift.extraHours * workDays.length;
+
+      weekSchedule.push({
+        employee,
+        shift: shift.name,
+        workDays,
+        restDays,
+        extraHours,
+        shiftClass: shift.class,
+        startDate: currentDate,
+        availability: shift.name === "10 PM - 6 AM" ? null : ""
+      });
+    });
+
+    // Validar que cada turno por día tenga al menos 3 empleados
+    let valid = true;
+    for (let day = 0; day < 7; day++) {
+      for (let shiftName of Object.keys(dailyAssignments[day])) {
+        if (dailyAssignments[day][shiftName].length < 3) {
+          valid = false;
+          break;
+        }
+      }
+      if (!valid) break;
+    }
+
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20;
+
+    while (week < numWeeks && attempts < MAX_ATTEMPTS) {
+      // lógica de generación...
+      if (!valid) {
+        attempts++;
+        continue;
+      }
+
+      attempts = 0; // resetear si es exitoso
+      week++;
+    }
+    //if (attempts = MAX_ATTEMPTS) {
+      //alert("No se pudo generar un horario válido tras varios intentos. Intente con más empleados.");
+    //}
+
+    // Garantizar al menos un empleado con disponibilidad en el turno nocturno
+    //const nightShiftEmployees = weekSchedule.filter(s => s.shift === "10 PM - 6 AM");
+    //if (nightShiftEmployees.length > 0) {
+      //const randomNightShiftEmployee = nightShiftEmployees[Math.floor(Math.random() * nightShiftEmployees.length)];
+      //randomNightShiftEmployee.availability = "Disponible";
+    //}
+
+    // Mostrar la tabla de la semana
+    const weekTable = document.createElement("table");
+    const weekTitle = document.createElement("h2");
+    const endDate = new Date(currentDate);
+    endDate.setDate(endDate.getDate() + 6);
+    weekTitle.innerText = `Semana ${week + 1} (${currentDate.getMonth() + 1}/${currentDate.getDate()} - ${endDate.getMonth() + 1}/${endDate.getDate()})`;
+
+    weeklySchedulesContainer.appendChild(weekTitle);
+    weeklySchedulesContainer.appendChild(weekTable);
+
+    displayWeeklySchedule(weekSchedule, weekTable);
+
+    currentDate.setDate(currentDate.getDate() + 7); // Avanzar a la siguiente semana
+  }
+}
+
+    function displayWeeklySchedule(weekSchedule, table) {
+      const days = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+      const headerRow = document.createElement("tr");
+
+      const thName = document.createElement("th");
+      thName.textContent = "Empleado";
+      headerRow.appendChild(thName);
+
+      const thShift = document.createElement("th");
+      thShift.textContent = "Turno";
+      headerRow.appendChild(thShift);
+
+      days.forEach(day => {
+        const th = document.createElement("th");
+        th.textContent = day;
+        headerRow.appendChild(th);
+      });
+
+      const thExtra = document.createElement("th");
+      thExtra.textContent = "Horas Extra";
+      headerRow.appendChild(thExtra);
+
+      //const thAvailability = document.createElement("th");
+      //thAvailability.textContent = "Disponibilidad";
+      //headerRow.appendChild(thAvailability);
+
+      table.appendChild(headerRow);
+
+      weekSchedule.forEach(entry => {
+        const row = document.createElement("tr");
+
+        const tdName = document.createElement("td");
+        tdName.textContent = entry.employee;
+        row.appendChild(tdName);
+
+        const tdShift = document.createElement("td");
+        tdShift.textContent = entry.shift;
+        tdShift.className = entry.shiftClass;
+        row.appendChild(tdShift);
+
+        for (let i = 0; i < 7; i++) {
+          const td = document.createElement("td");
+          if (entry.workDays.includes(i)) {
+            td.textContent = "Trabajo";
+            td.className = "work-day";
+          } else {
+            td.textContent = "Descanso";
+            td.className = "rest-day";
+          }
+          row.appendChild(td);
+        }
+
+        const tdExtra = document.createElement("td");
+        tdExtra.textContent = entry.extraHours;
+        row.appendChild(tdExtra);
+
+        //const tdAvailability = document.createElement("td");
+        //tdAvailability.textContent = entry.availability || "";
+        //if (entry.availability) tdAvailability.className = "availability";
+        //row.appendChild(tdAvailability);
+
+        table.appendChild(row);
+      });
+    }
+
+        function downloadPDF() {
+            if (!window.jspdf || !window.jspdf.jsPDF) {
+                alert("Error: jsPDF no está disponible.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: "landscape", 
+                unit: "mm",
+                format: "a4"
+            });
+
+            doc.text("Horario de Trabajo", 14, 15);
+
+            const tables = document.querySelectorAll("table");
+            let currentY = 20; // Y inicial de la primera tabla
+
+            tables.forEach((table, index) => {
+                const headers = [];
+                const body = [];
+
+                table.querySelectorAll("tr").forEach((row, rowIndex) => {
+                    const rowData = [];
+                    row.querySelectorAll("th, td").forEach((cell, cellIndex) => {
+                        let text = cell.innerText.trim();
+                        let bgColor = window.getComputedStyle(cell).backgroundColor;
+
+                        rowData.push({ content: text, styles: { fillColor: rgbFromCss(bgColor) } });
+
+                        if (rowIndex === 0) headers.push(text);
+                    });
+
+                    if (rowIndex > 0) body.push(rowData);
+                });
+
+                // Crear una nueva página para cada tabla
+                if (index > 0) {
+                    doc.addPage(); // Agregar nueva página para cada tabla
+                    currentY = 20; // Reiniciar posición Y al principio de la nueva página
+                }
+
+                // Crear una tabla en el PDF
+                doc.autoTable({
+                    startY: currentY,
+                    head: [headers],
+                    body: body,
+                    theme: "striped",
+                    styles: { overflow: 'linebreak', fontSize: 10 },
+                    columnStyles: { text: { cellWidth: 'auto' } }
+                });
+
+                currentY = doc.lastAutoTable.finalY + 10; // Actualizar la posición Y para la siguiente tabla
+            });
+
+            doc.save("Horario_Trabajo.pdf");
+        }
+
+        function rgbFromCss(color) {
+            const match = color.match(/^rgb\((\d+), (\d+), (\d+)\)$/);
+            if (match) {
+                return [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+            }
+            return [255, 255, 255]; // Fallback to white if parsing fails
+        }
+
+
+
+
+  // ✅ Este código asegura que Enter funciona correctamente
+  document.addEventListener("DOMContentLoaded", function () {
+    const input = document.getElementById("employeeName");
+
+    input.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault(); // Prevenir comportamiento por defecto (ej. enviar formulario)
+        addEmployee();          // Llamar directamente a la función
+      }
+    });
+  });
+    </script>
+</body>
+</html>
